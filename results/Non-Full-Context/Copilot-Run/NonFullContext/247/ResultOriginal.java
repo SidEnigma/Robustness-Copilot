@@ -1,0 +1,178 @@
+/*
+  * Copyright (c) 2013 European Bioinformatics Institute (EMBL-EBI)
+  *                    John May <jwmay@users.sf.net>
+  *
+  * Contact: cdk-devel@lists.sourceforge.net
+  *
+  * This program is free software; you can redistribute it and/or modify it
+  * under the terms of the GNU Lesser General Public License as published by
+  * the Free Software Foundation; either version 2.1 of the License, or (at
+  * your option) any later version. All we ask is that proper credit is given
+  * for our work, which includes - but is not limited to - adding the above
+  * copyright notice to the beginning of your source code files, and to any
+  * copyright notice that you may distribute with programs based on this work.
+  *
+  * This program is distributed in the hope that it will be useful, but WITHOUT
+  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+  * License for more details.
+  *
+  * You should have received a copy of the GNU Lesser General Public License
+  * along with this program; if not, write to the Free Software
+  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 U
+  */
+ 
+ package org.openscience.cdk.isomorphism;
+ 
+ 
+ /**
+  * A compatibility matrix defines which query vertices (rows) could possible be
+  * mapped to a target vertex (columns). The matrix is used in the Ullmann and
+  * Ullmann-like algorithms to provide top-down pruning.
+  *
+  * Instead of using a binary matrix this implementation uses int values. This
+  * allows us to remove a mapping but put it back in later (backtrack).
+  *
+  * @author John May
+  * @cdk.module isomorphism
+  * @see UllmannState
+  */
+ final class CompatibilityMatrix {
+ 
+     /** Value storage. */
+     final int[] data;
+ 
+     /** Size of the matrix. */
+     final int   nRows, mCols;
+ 
+     /**
+      * Create a matrix of the given size.
+      *
+      * @param nRows number of rows
+      * @param mCols number of columns
+      */
+     CompatibilityMatrix(int nRows, int mCols) {
+         this.data = new int[nRows * mCols];
+         this.nRows = nRows;
+         this.mCols = mCols;
+     }
+ 
+     /**
+      * Set the value in row, i and column j.
+      *
+      * @param i row index
+      * @param j column index
+      */
+     void set(int i, int j) {
+         data[(i * mCols) + j] = 1;
+     }
+ 
+     /**
+      * Access the value at index i, values wrap around to the next row.
+      *
+      * @param i index
+      * @return the value is set
+      */
+     boolean get(int i) {
+         return data[i] > 0;
+     }
+ 
+     /**
+      * Access the value at row i and column j. The values wrap around to the
+      * next row.
+      *
+      * @param i index
+      * @return the value is set
+      */
+     boolean get(int i, int j) {
+         return get((i * mCols) + j);
+     }
+ 
+     /**
+      * Mark the value in row i and column j allowing it to be reset later.
+      *
+      * @param i       row index
+      * @param j       column index
+      * @param marking the marking to store (should be negative)
+      */
+     void mark(int i, int j, int marking) {
+         data[(i * mCols) + j] = marking;
+     }
+ 
+ 
+/** Mark all values in row i allowing it to be reset later. */
+ void markRow(int i, int marking){
+        for (int j = 0; j < mCols; j++)
+            mark(i, j, marking);
+    }
+    
+        /**
+        * Reset the value in row i and column j.
+        *
+        * @param i row index
+        * @param j column index
+        */
+        void reset(int i, int j) {
+            data[(i * mCols) + j] = 0;
+        }
+    
+        /**
+        * Reset all values in row i.
+        *
+        * @param i row index
+        */
+        void resetRow(int i) {
+            for (int j = 0; j < mCols; j++)
+                reset(i, j);
+        }
+    
+        /**
+        * Reset all values in the matrix.
+        */
+        void reset() {
+            for (int i = 0; i < nRows; i++)
+                resetRow(i);
+        }
+    
+        /**
+        * Reset all values in the matrix.
+        */
+        void reset(int marking) {
+            for (int i = 0; i < nRows; i++)
+                markRow(i, marking);
+        }
+    
+        /**
+        * Reset all values in the matrix.
+        */
+        void reset(int marking, int i) {
+            for (int j = 0; j < mCols; j++)
+                mark(i, j, marking);
+        }
+    
+        /**
+        * Reset all values in the matrix.
+        */
+        void reset(int marking, int i, int j) {
+            mark(i, j, marking);
+        }
+    
+        /**
+        * Reset all values in the matrix.
+        */
+        void reset(int marking, int i, int j, int k) {
+            mark(i, j, marking);
+            mark(i, k, marking);
+            mark(j, k, marking);
+        }
+    
+        /**
+        * Reset all values in the matrix.
+        */
+        void reset(int marking, int i, int j, int k, int l) {
+            mark(i, j, marking);        
+ }
+
+ 
+
+}
