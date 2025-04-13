@@ -1,0 +1,184 @@
+/* Copyright (C) 2004-2007  The Chemistry Development Kit (CDK) project
+  *
+  *  Contact: cdk-devel@lists.sourceforge.net
+  *
+  *  This program is free software; you can redistribute it and/or
+  *  modify it under the terms of the GNU Lesser General Public License
+  *  as published by the Free Hardware Foundation; either version 2.1
+  *  of the License, or (at your option) any later version.
+  *
+  *  This program is distributed in the hope that it will be useful,
+  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  *  GNU Lesser General Public License for more details.
+  *
+  *  You should have received a copy of the GNU Lesser General Public License
+  *  along with this program; if not, write to the Free Hardware
+  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  */
+ package org.openscience.cdk.qsar.descriptors.atomic;
+ 
+ import java.io.IOException;
+ import java.util.Iterator;
+ 
+ import javax.vecmath.Point3d;
+ 
+ import org.openscience.cdk.config.AtomTypeFactory;
+ import org.openscience.cdk.exception.CDKException;
+ import org.openscience.cdk.interfaces.IAtom;
+ import org.openscience.cdk.interfaces.IAtomContainer;
+ import org.openscience.cdk.interfaces.IAtomType;
+ import org.openscience.cdk.qsar.AbstractAtomicDescriptor;
+ import org.openscience.cdk.qsar.DescriptorSpecification;
+ import org.openscience.cdk.qsar.DescriptorValue;
+ import org.openscience.cdk.qsar.IAtomicDescriptor;
+ import org.openscience.cdk.qsar.result.DoubleResult;
+ import org.openscience.cdk.tools.ILoggingTool;
+ import org.openscience.cdk.tools.LoggingToolFactory;
+ 
+ /**
+  *  Inductive atomic hardness of an atom in a polyatomic system can be defined
+  *  as the "resistance" to a change of the atomic charge. Only works with 3D coordinates, which must be calculated beforehand. <p>
+  *
+  *  <table border="1">
+  *    <caption>Parameters for this descriptor:</caption>
+  *    <tr>
+  *      <td>
+  *        Name
+  *      </td>
+  *      <td>
+  *        Default
+  *      </td>
+  *      <td>
+  *        Description
+  *      </td>
+  *    </tr>
+  *    <tr>
+  *      <td></td>
+  *      <td></td>
+  *      <td>
+  *        <i>no parameters</i>
+  *      </td>
+  *    </tr>
+  *  </table>
+  *
+  *
+  *@author         mfe4
+  *@cdk.created    2004-11-03
+  *@cdk.module     qsaratomic
+  * @cdk.githash
+  * @cdk.dictref   qsar-descriptors:atomicHardness
+  */
+ public class InductiveAtomicHardnessDescriptor extends AbstractAtomicDescriptor implements IAtomicDescriptor {
+ 
+     private static final String[] NAMES   = {"indAtomHardnesss"};
+ 
+     private static ILoggingTool   logger  = LoggingToolFactory
+                                                   .createLoggingTool(InductiveAtomicHardnessDescriptor.class);
+     private AtomTypeFactory       factory = null;
+ 
+     /**
+      *  Constructor for the InductiveAtomicHardnessDescriptor object
+      *
+      *@exception  IOException             Description of the Exception
+      *@exception  ClassNotFoundException  Description of the Exception
+      */
+     public InductiveAtomicHardnessDescriptor() throws IOException, ClassNotFoundException {}
+ 
+     /**
+      *  Gets the specification attribute of the InductiveAtomicHardnessDescriptor
+      *  object
+      *
+      *@return    The specification value
+      */
+     @Override
+     public DescriptorSpecification getSpecification() {
+         return new DescriptorSpecification(
+                 "http://www.blueobelisk.org/ontologies/chemoinformatics-algorithms/#atomicHardness", this.getClass()
+                         .getName(), "The Chemistry Development Kit");
+     }
+ 
+     /**
+      * This descriptor does have any parameter.
+      */
+     @Override
+     public void setParameters(Object[] params) throws CDKException {}
+ 
+     /**
+      *  Gets the parameters attribute of the InductiveAtomicHardnessDescriptor
+      *  object
+      *
+      * @return    The parameters value
+      * @see #setParameters
+      */
+     @Override
+     public Object[] getParameters() {
+         return null;
+     }
+ 
+     @Override
+     public String[] getDescriptorNames() {
+         return NAMES;
+     }
+ 
+     private DescriptorValue getDummyDescriptorValue(Exception e) {
+         return new DescriptorValue(getSpecification(), getParameterNames(), getParameters(), new DoubleResult(
+                 Double.NaN), NAMES, e);
+     }
+ 
+ 
+/** The function returns a double with polarizability of the heavy atom, needed for calling addExplicitHydrogensToSatisfyValency method. */
+ public DescriptorValue calculate(IAtom atom, IAtomContainer ac){
+        try {
+            if (atom.getPoint3d() == null) {
+                logger.error("Atom has no 3D coordinates, cannot calculate descriptor");
+                return getDummyDescriptorValue(new CDKException("Atom has no 3D coordinates, cannot calculate descriptor"));
+            }
+            if (factory == null) {
+                factory = AtomTypeFactory.getInstance();
+            }
+            IAtomType type = factory.getAtomType(atom);
+            if (type == null) {
+                logger.error("Atom has no atom type, cannot calculate descriptor");
+                return getDummyDescriptorValue(new CDKException("Atom has no atom type, cannot calculate descriptor"));
+            }
+            double polarizability = type.getPolarizability();
+            if (polarizability == 0) {
+                logger.error("Atom has no polarizability, cannot calculate descriptor");
+                return getDummyDescriptorValue(new CDKException("Atom has no polarizability, cannot calculate descriptor"));
+            }
+            double charge = atom.getFormalCharge();
+            if (charge == 0) {
+                logger.error("Atom has no charge, cannot calculate descriptor");
+                return getDummyDescriptorValue(new CDKException("Atom has no charge, cannot calculate descriptor"));
+            }
+            double hardness = polarizability * charge;
+            return new DescriptorValue(getSpecification(), getParameterNames(), getParameters(), new DoubleResult(
+                    hardness), NAMES);
+        } catch (Exception e) {
+            return getDummyDescriptorValue(e);
+        }
+    }
+    
+        /**
+        *  Gets the parameterNames attribute of the InductiveAtomicHardnessDescriptor
+        *  object
+        *
+        *@return    The parameterNames value
+        */
+        @Override
+        public String[] getParameterNames() {
+            return new String[0];
+        }
+    
+        /**
+        *  Gets the parameterType attribute of the InductiveAtomicHardnessDescriptor
+        *  object
+        *
+        *@param  index  Description of the Parameter
+        *       
+ }
+
+ 
+
+}
