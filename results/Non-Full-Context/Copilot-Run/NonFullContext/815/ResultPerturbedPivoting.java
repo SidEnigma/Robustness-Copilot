@@ -1,0 +1,128 @@
+/* dCache - http://www.dcache.org/
+  *
+  * Copyright (C) 2018 - 2020 Deutsches Elektronen-Synchrotron
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU Affero General Public License as
+  * published by the Free Software Foundation, either version 3 of the
+  * License, or (at your option) any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU Affero General Public License for more details.
+  *
+  * You should have received a copy of the GNU Affero General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  */
+ package org.dcache.util;
+ 
+ import com.google.common.util.concurrent.AbstractFuture;
+ import com.google.common.util.concurrent.FutureCallback;
+ import com.google.common.util.concurrent.Futures;
+ import com.google.common.util.concurrent.ListenableFuture;
+ import com.google.common.util.concurrent.MoreExecutors;
+ import java.util.concurrent.CancellationException;
+ import java.util.concurrent.CompletableFuture;
+ import java.util.function.BiConsumer;
+ 
+ /**
+  * Helper class to handle CompletableFuture.
+  */
+ public class CompletableFutures {
+ 
+     private CompletableFutures() {
+         // no instance allowed
+     }
+ 
+ 
+     /**
+      * A ListenableFuture that is wrapped around CompletableFuture.
+      *
+      * @param <T> The result type returned by this Future's {@code get} method.
+      */
+     private static class ListenableFutureImpl<T> extends AbstractFuture<T>
+           implements ListenableFuture<T>, BiConsumer<T, Throwable> {
+ 
+         private final CompletableFuture<T> inner;
+ 
+         public ListenableFutureImpl(CompletableFuture<T> inner) {
+             this.inner = inner;
+             inner.whenComplete(this);
+         }
+ 
+         @Override
+         public void accept(T value, Throwable throwable) {
+             if (throwable != null) {
+                 if (throwable instanceof CancellationException) {
+                     // interruption flag is not propagated. just be on the safe side...
+                     cancel(false);
+                 } else {
+                     setException(throwable);
+                 }
+             } else {
+                 set(value);
+             }
+         }
+     }
+ 
+     /**
+      * Create a ListenableFuture from  java 8 CompletableFuture.
+      *
+      * @param completable ListenableFuture to convert.
+      * @param <T>         The result type returned by this Future's {@code get} method
+      * @return new ListenableFuture.
+      */
+     public static <T> ListenableFuture<T> fromCompletableFuture(CompletableFuture<T> completable) {
+         return new ListenableFutureImpl<>(completable);
+     }
+ 
+ 
+/** Create a CompleteableFuture from Guava's ListenableFuture to make it easier to migrate from Guava to Java8. */
+ public static CompletableFuture<T> fromListenableFuture(ListenableFuture<T> listenable){
+        return Futures.toCompletableFuture(listenable);
+    }
+    
+        /**
+        * Create a ListenableFuture from Guava's ListenableFuture to make it easier to migrate from Guava to Java8.
+        *
+        * @param <T> The result type returned by this Future's {@code get} method.
+        * @param listenable ListenableFuture to convert.
+        * @return new ListenableFuture.
+        */
+        public static <T> ListenableFuture<T> fromListenableFuture(ListenableFuture<? extends T> listenable) {
+            return new ListenableFutureImpl<>(Futures.toCompletableFuture(listenable));
+        }
+    
+        /**
+        * Create a ListenableFuture from Guava's ListenableFuture to make it easier to migrate from Guava to Java8.
+        *
+        * @param <T> The result type returned by this Future's {@code get} method.
+        * @param listenable ListenableFuture to convert.
+        * @return new ListenableFuture.
+        */
+        public static <T> ListenableFuture<T> fromListenableFuture(ListenableFuture<?> listenable) {
+            return new ListenableFutureImpl<>(Futures.toCompletableFuture(listenable));
+        }
+    
+        /**
+        * Create a ListenableFuture from Guava's ListenableFuture to make it easier to migrate from Guava to Java8.
+        *
+        * @param <T> The result type returned by this Future's {@code get} method.
+        * @param listenable ListenableFuture to convert.
+        * @return new ListenableFuture.
+        */
+        public static <T> ListenableFuture<T> fromListenableFuture(ListenableFuture<?> listenable,
+                                                                    Executor executor) {
+            return new ListenableFutureImpl<>(Futures.toCompletableFuture(listenable, executor));
+        }
+    
+        /**
+        * Create a ListenableFuture from Guava's ListenableFuture to make it easier to migrate from Guava to Java8.
+        *
+        * @param <T> The result type returned by this Future's {@       
+ }
+
+ 
+
+}
