@@ -1,0 +1,128 @@
+package org.matsim.contrib.osm.networkReader;
+ 
+ import org.apache.log4j.Logger;
+ import org.matsim.api.core.v01.Coord;
+ import org.matsim.api.core.v01.Id;
+ import org.matsim.api.core.v01.network.Link;
+ import org.matsim.api.core.v01.network.Network;
+ import org.matsim.api.core.v01.network.NetworkFactory;
+ import org.matsim.api.core.v01.network.Node;
+ import org.matsim.core.network.NetworkUtils;
+ import org.matsim.core.utils.geometry.CoordUtils;
+ import org.matsim.core.utils.geometry.CoordinateTransformation;
+ 
+ import java.nio.file.Path;
+ import java.nio.file.Paths;
+ import java.util.*;
+ import java.util.concurrent.ConcurrentMap;
+ import java.util.concurrent.Executors;
+ import java.util.function.BiPredicate;
+ import java.util.function.Consumer;
+ import java.util.function.Predicate;
+ 
+ /**
+  * Class for converting osm-networks into matsim-networks. This class uses the binary osm.pbf format as an input. Suitable
+  * input files can be found at https://download.geofabrik.de
+  * <p>
+  * Examples on how to use the reader can be found in {@link org.matsim.contrib.osm.examples}
+  * <p>
+  * For the most common highway tags the {@link LinkProperties} class contains default properties for the
+  * corresponding links in the matsim-network (e.g. speed, number of lanes). Those default properties may be overridden
+  * with custom link properties using the {@link SupersonicOsmNetworkReader.Builder#addOverridingLinkProperties(String, LinkProperties)}
+  * method of the Builder.
+  */
+ public class SupersonicOsmNetworkReader {
+ 
+     private static final Logger log = Logger.getLogger(SupersonicOsmNetworkReader.class);
+ 
+     private static final Set<String> reverseTags = new HashSet<>(Arrays.asList("-1", "reverse"));
+     private static final Set<String> oneWayTags = new HashSet<>(Arrays.asList("yes", "true", "1"));
+     private static final Set<String> notOneWayTags = new HashSet<>(Arrays.asList("no", "false", "0"));
+ 
+     private final Predicate<Long> preserveNodeWithId;
+     private final AfterLinkCreated afterLinkCreated;
+     private final double freeSpeedFactor;
+     private final double adjustCapacityLength;
+     private final BiPredicate<Coord, Integer> includeLinkAtCoordWithHierarchy;
+     final OsmNetworkParser parser;
+ 
+     private Network network;
+ 
+     SupersonicOsmNetworkReader(OsmNetworkParser parser,
+                                Predicate<Long> preserveNodeWithId,
+                                BiPredicate<Coord, Integer> includeLinkAtCoordWithHierarchy,
+                                AfterLinkCreated afterLinkCreated,
+                                double freeSpeedFactor, double adjustCapacityLength) {
+         this.parser = parser;
+         this.preserveNodeWithId = preserveNodeWithId;
+         this.includeLinkAtCoordWithHierarchy = includeLinkAtCoordWithHierarchy;
+         this.afterLinkCreated = afterLinkCreated;
+         this.freeSpeedFactor = freeSpeedFactor;
+         this.adjustCapacityLength = adjustCapacityLength;
+     }
+ 
+ 
+/** Creates a function to adjust the freespeed for urban links. */
+ static AfterLinkCreated adjustFreespeed(final double factor){
+        return (link, network) -> {
+            if (link.getFreespeed() > 0) {
+                link.setFreespeed(link.getFreespeed() * factor);
+            }
+        };
+    }
+    
+        /**
+        * Creates a function to adjust the capacity for urban links.
+        * @param factor the factor to adjust the capacity with
+        * @return the function to adjust the capacity
+        */
+        static AfterLinkCreated adjustCapacity(final double factor){
+            return (link, network) -> {
+                if (link.getCapacity() > 0) {
+                    link.setCapacity(link.getCapacity() * factor);
+                }
+            };
+        }
+    
+        /**
+        * Creates a function to adjust the capacity for urban links.
+        * @param factor the factor to adjust the capacity with
+        * @return the function to adjust the capacity
+        */
+        static AfterLinkCreated adjustLength(final double factor){
+            return (link, network) -> {
+                if (link.getLength() > 0) {
+                    link.setLength(link.getLength() * factor);
+                }
+            };
+        }
+    
+        /**
+        * Creates a function to adjust the capacity for urban links.
+        * @param factor the factor to adjust the capacity with
+        * @return the function to adjust the capacity
+        */
+        static AfterLinkCreated adjustCapacityLength(final double factor){
+            return (link, network) -> {
+                if (link.getCapacity() > 0) {
+                    link.setCapacity(link.getCapacity() * factor);
+                }
+                if (link.getLength() > 0) {
+                    link.setLength(link.getLength() * factor);
+                }
+            };
+        }
+    
+        /**
+        * Creates a function to adjust the capacity for urban links.
+        * @param factor the factor to adjust the capacity with
+        * @return the function to adjust the capacity
+        */
+        static AfterLinkCreated adjustCapacityLengthFreespeed(final double factor){
+            return (link, network) -> {
+                if (link.getCapacity() > 0      
+ }
+
+ 
+
+}

@@ -1,0 +1,264 @@
+/*
+  * Licensed under the Apache License, Version 2.0 (the "License");
+  * you may not use this file except in compliance with the License.
+  * You may obtain a copy of the License at
+  *
+  *     http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+ 
+ package tech.tablesaw.table;
+ 
+ import com.google.common.base.Preconditions;
+ import it.unimi.dsi.fastutil.ints.IntArrays;
+ import it.unimi.dsi.fastutil.ints.IntComparator;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.Iterator;
+ import java.util.List;
+ import java.util.PrimitiveIterator;
+ import java.util.stream.IntStream;
+ import javax.annotation.Nullable;
+ import tech.tablesaw.aggregate.NumericAggregateFunction;
+ import tech.tablesaw.api.NumericColumn;
+ import tech.tablesaw.api.Row;
+ import tech.tablesaw.api.Table;
+ import tech.tablesaw.columns.Column;
+ import tech.tablesaw.selection.Selection;
+ import tech.tablesaw.sorting.Sort;
+ import tech.tablesaw.sorting.SortUtils;
+ import tech.tablesaw.sorting.comparators.IntComparatorChain;
+ 
+ /**
+  * A TableSlice is a facade around a Relation that acts as a filter. Requests for data are forwarded
+  * to the underlying table. A TableSlice can be sorted independently of the underlying table.
+  *
+  * <p>A TableSlice is only good until the structure of the underlying table changes.
+  */
+ public class TableSlice extends Relation {
+ 
+   private final Table table;
+   private String name;
+   @Nullable private Selection selection;
+   @Nullable private int[] sortOrder = null;
+ 
+   /**
+    * Returns a new View constructed from the given table, containing only the rows represented by
+    * the bitmap
+    */
+   public TableSlice(Table table, Selection rowSelection) {
+     this.name = table.name();
+     this.selection = rowSelection;
+     this.table = table;
+   }
+ 
+   /**
+    * Returns a new view constructed from the given table. The view can be sorted independently of
+    * the table.
+    */
+   public TableSlice(Table table) {
+     this.name = table.name();
+     this.selection = null;
+     this.table = table;
+   }
+ 
+   @Override
+   public Column<?> column(int columnIndex) {
+     Column<?> col = table.column(columnIndex);
+     if (isSorted()) {
+       return col.subset(sortOrder);
+     } else if (hasSelection()) {
+       return col.where(selection);
+     }
+     return col;
+   }
+ 
+   @Override
+   public Column<?> column(String columnName) {
+     return column(table.columnIndex(columnName));
+   }
+ 
+   @Override
+   public int columnCount() {
+     return table.columnCount();
+   }
+ 
+   @Override
+   public int rowCount() {
+     if (hasSelection()) {
+       return selection.size();
+     }
+     return table.rowCount();
+   }
+ 
+   @Override
+   public List<Column<?>> columns() {
+     List<Column<?>> columns = new ArrayList<>();
+     for (int i = 0; i < columnCount(); i++) {
+       columns.add(column(i));
+     }
+     return columns;
+   }
+ 
+   @Override
+   public int columnIndex(Column<?> column) {
+     return table.columnIndex(column);
+   }
+ 
+   @Override
+   public Object get(int r, int c) {
+     return table.get(mappedRowNumber(r), c);
+   }
+ 
+   @Override
+   public String name() {
+     return name;
+   }
+ 
+   public Table getTable() {
+     return table;
+   }
+ 
+   /** Clears all rows from this View, leaving the structure in place */
+   @Override
+   public void clear() {
+     sortOrder = null;
+     selection = Selection.with();
+   }
+ 
+   /** Removes the sort from this View. */
+   public void removeSort() {
+     this.sortOrder = null;
+   }
+ 
+   /**
+    * Removes the selection from this view, leaving it with the same number of rows as the underlying
+    * source table.
+    */
+   public void removeSelection() {
+     this.selection = null;
+   }
+ 
+   @Override
+   public List<String> columnNames() {
+     return table.columnNames();
+   }
+ 
+   @Override
+   public TableSlice addColumns(Column<?>... column) {
+     throw new UnsupportedOperationException(
+         "Class TableSlice does not support the addColumns operation");
+   }
+ 
+   @Override
+   public TableSlice removeColumns(Column<?>... columns) {
+     throw new UnsupportedOperationException(
+         "Class TableSlice does not support the removeColumns operation");
+   }
+ 
+   @Override
+   public Table first(int nRows) {
+     int count = 0;
+     PrimitiveIterator.OfInt it = sourceRowNumberIterator();
+     Table copy = table.emptyCopy();
+     while (it.hasNext() && count < nRows) {
+       int row = it.nextInt();
+       copy.addRow(table.row(row));
+       count++;
+     }
+     return copy;
+   }
+ 
+   @Override
+   public TableSlice setName(String name) {
+     this.name = name;
+     return this;
+   }
+ 
+   public Table asTable() {
+     Table table = Table.create(this.name());
+     for (Column<?> column : this.columns()) {
+       table.addColumns(column);
+     }
+     return table;
+   }
+ 
+   /**
+    * IntIterator of source table row numbers that are present in this view. This can be used to in
+    * combination with the source table to iterate over the cells of a column in a sorted order
+    * without copying the column.
+    *
+    * @return an int iterator of row numbers in the source table that are present in this view.
+    */
+   protected PrimitiveIterator.OfInt sourceRowNumberIterator() {
+     if (this.isSorted()) {
+       return Arrays.stream(sortOrder).iterator();
+     } else if (this.hasSelection()) {
+       return selection.iterator();
+     }
+     return Selection.withRange(0, table.rowCount()).iterator();
+   }
+ 
+   /**
+    * Returns the result of applying the given function to the specified column
+    *
+    * @param numberColumnName The name of a numeric column in this table
+    * @param function A numeric reduce function
+    * @return the function result
+    * @throws IllegalArgumentException if numberColumnName doesn't name a numeric column in this
+    *     table
+    */
+   public double reduce(String numberColumnName, NumericAggregateFunction function) {
+     NumericColumn<?> column = table.numberColumn(numberColumnName);
+     if (hasSelection()) {
+       return function.summarize(column.where(selection));
+     }
+     return function.summarize(column);
+   }
+ 
+ 
+/** Go through the source table's underlying rows iteratively. The row in the source table will change if one of the rows is set during iterating. */
+ public Iterator<Row> iterator(){
+    return new Iterator<Row>() {
+      private int row = 0;
+      private int nextRow = 0;
+      private Row nextRow_ = null;
+      private boolean hasNext = false;
+      private boolean hasNext_ = false;
+      private boolean hasNextNext = false;
+      private boolean hasNextNext_ = false;
+      private boolean hasNextNextNext = false;
+      private boolean hasNextNextNext_ = false;
+      private boolean hasNextNextNextNext = false;
+      private boolean hasNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNextNextNextNext = false;
+      private boolean hasNextNextNextNextNextNextNextNextNextNextNextNextNextNext_ = false;
+      private boolean hasNextNextNextNextNextNextNextNextNext   
+ }
+
+ 
+
+}
