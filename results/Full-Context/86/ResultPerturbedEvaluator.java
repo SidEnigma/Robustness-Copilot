@@ -1,0 +1,105 @@
+package net.masterthought.cucumber.reducers;
+ 
+ import net.masterthought.cucumber.json.Element;
+ import net.masterthought.cucumber.json.Feature;
+ 
+ import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
+ 
+ import static com.google.common.base.Preconditions.checkArgument;
+ 
+ /**
+  * Merge list of given features. If there are couple of scenarios with the same Id then
+  * only the latest will be stored into the report.
+  *
+  * Uses when need to generate a report with rerun results of failed tests.
+  */
+ final class ReportFeatureWithRetestMerger implements ReportFeatureMerger {
+ 
+     private static final String ERROR = "You are not able to use this type of results merge. The start_timestamp field" +
+             " should be part of element object. Please, update the cucumber-jvm version.";
+     private static final ElementComparator ELEMENT_COMPARATOR = new ElementComparator();
+ 
+     @Override
+     public List<Feature> merge(List<Feature> features) {
+         Map<String, Feature> mergedFeatures = new HashMap<>();
+         for (Feature candidate : features) {
+             Feature mergedFeature = mergedFeatures.get(candidate.getId());
+             if (mergedFeature == null) {
+                 mergedFeatures.put(candidate.getId(), candidate);
+             }
+             else {
+                 updateElements(mergedFeatures.get(candidate.getId()), candidate.getElements());
+             }
+         }
+         return new ArrayList<>(mergedFeatures.values());
+     }
+ 
+ 
+/** If the element's id matches the id of any element in the @feature object, it updates the elements in the feature with the elements in the @elements list. The element is added to the end of the @feature element list if there is no element in the @feature object. */
+ void updateElements(Feature feature, Element[] elements){
+        for (Element element : elements) {
+            if (feature.getElements().stream().anyMatch(e -> ELEMENT_COMPARATOR.compare(e, element))) {
+                feature.getElements().stream()
+                        .filter(e -> ELEMENT_COMPARATOR.compare(e, element))
+                        .findFirst()
+                        .ifPresent(e -> e.setStartTimestamp(element.getStartTimestamp()));
+            } else {
+                feature.getElements().add(element);
+            }
+        }
+    }
+    
+        @Override
+        public boolean canMerge(List<Feature> features) {
+            checkArgument(features.size() > 1, "You are not able to use this type of results merge. The start_timestamp field" +
+                    " should be part of element object. Please, update the cucumber-jvm version.");
+            return features.stream().allMatch(f -> f.getElements().stream().anyMatch(e -> e.getStartTimestamp() != null));
+        }
+    
+        @Override
+        public String getErrorMessage() {
+            return ERROR;
+        }       
+ }
+
+                                  
+     /**
+      * @return true when candidate element happened after the target element.
+      */
+     boolean replaceIfExists(Element target, Element candidate) {
+         return candidate.getStartTime().compareTo(target.getStartTime()) >= 0;
+     }
+ 
+     /**
+      * @return true when element from elements array with index=elementInd is a background.
+      */
+     boolean isBackground(int elementInd, Element[] elements) {
+         return elementInd >= 0 &&
+                 elements != null &&
+                 elementInd < elements.length &&
+                 elements[elementInd].isBackground();
+     }
+ 
+     /**
+      * @return an index of an element which is indicated as similar by rules
+      * defined in the ELEMENT_COMPARATOR. The comparator indicates that
+      * an element is found in the elements list with the same Id (for scenario)
+      * as target element has or it's on the same line (for background).
+      */
+     int find(Element[] elements, Element target) {
+         for (int i = 0; i < elements.length; i++) {
+             if (ELEMENT_COMPARATOR.compare(elements[i], target) == 0) {
+                 return i;
+             }
+         }
+         return -1;
+     }
+ 
+     @Override
+     public boolean test(List<ReducingMethod> reducingMethods) {
+         return reducingMethods != null && reducingMethods.contains(ReducingMethod.MERGE_FEATURES_WITH_RETEST);
+     }
+ }
